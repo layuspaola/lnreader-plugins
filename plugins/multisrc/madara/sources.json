@@ -671,14 +671,15 @@
       "useNewChapterEndpoint": true
     }
   },
-  {
-    "id": "bailiantales",
-    "sourceSite": "https://bailiantales.com",
-    "sourceName": "BaiLianTales",
-    "options": {
-      "lang": "English",
-      "useNewChapterEndpoint": false,
-      "versionIncrements": 2
-    }
-  }
+     {
+       "id": "bailiantales",
+       "sourceSite": "https://bailiantales.com",
+       "sourceName": "BaiLianTales",
+       "options": {
+         "lang": "English",
+         "useNewChapterEndpoint": true,
+         "browserHeaders": true,
+         "versionIncrements": 3
+       }
+     }
 ]
