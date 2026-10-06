@@ -677,8 +677,8 @@
     "sourceName": "BaiLianTales",
     "options": {
       "lang": "English",
-      "useNewChapterEndpoint": true,
-      "versionIncrements": 1
+      "useNewChapterEndpoint": false,
+      "versionIncrements": 2
     }
   }
 ]
