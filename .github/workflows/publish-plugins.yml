@@ -9,9 +9,10 @@ on:
       - 'public/**'
       - 'scripts/publish-plugins.sh'
       - '.github/workflows/publish-plugins.yml'
+      - 'scripts/multisrc/**'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}
