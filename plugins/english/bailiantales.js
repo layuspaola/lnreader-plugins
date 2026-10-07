@@ -1,4 +1,3 @@
-import { Plugin } from '@typings/plugin';
 import { fetchApi } from '@libs/fetch';
 import { NovelStatus } from '@libs/novelStatus';
 import cheerio from 'cheerio';
@@ -9,12 +8,14 @@ export const site = 'https://bailiantales.com/';
 export const version = '1.0.1';
 export const icon = 'plugins/en/bailiantales/icon.png';
 
-export default class BailianTalesPlugin implements Plugin {
-  id = id;
-  name = name;
-  icon = icon;
-  site = site;
-  version = version;
+export default class BailianTalesPlugin {
+  constructor() {
+    this.id = id;
+    this.name = name;
+    this.icon = icon;
+    this.site = site;
+    this.version = version;
+  }
 
   async popularNovels(page) {
     const url = `${this.site}page/${page}/?s&post_type=wp-manga&m_orderby=views`;
@@ -59,7 +60,7 @@ export default class BailianTalesPlugin implements Plugin {
 
     const chapters = [];
 
-    // Intento 1: Extracción directa de capítulos desde el HTML principal
+    // Intento 1: Extracción directa si están en el HTML
     $('.wp-manga-chapter').each((i, el) => {
       const name = $(el).find('a').text().trim();
       const href = $(el).find('a').attr('href');
@@ -72,7 +73,7 @@ export default class BailianTalesPlugin implements Plugin {
       }
     });
 
-    // Intento 2: Extracción vía AJAX si la lista del HTML viene vacía
+    // Intento 2: Extracción vía AJAX si la lista vino vacía
     if (chapters.length === 0) {
       const mangaId = $('#manga-chapters-holder').attr('data-id');
       if (mangaId) {
