@@ -7,30 +7,51 @@ class BailianTalesPlugin {
   name = 'Bailian Tales';
   icon = 'plugins/english/bailiantales/icon.png';
   site = 'https://bailiantales.com/';
-  version = '1.0.4';
+  version = '1.0.5';
+
+  // Función interna para obtener la URL limpia de la portada
+  private parseCover($img: any): string {
+    let src =
+      $img.attr('data-src') ||
+      $img.attr('data-lazy-src') \vert{}\vert{}$img.attr('src') ||
+      '';
+
+    // Si viene un atributo srcset con varias imágenes, tomamos la primera URL limpia
+    const srcset = $img.attr('data-srcset') \vert{}\vert{}$img.attr('srcset');
+    if (srcset) {
+      const firstUrl = srcset.split(',')[0].trim().split(' ')[0];
+      if (firstUrl && !firstUrl.startsWith('data:image')) {
+        src = firstUrl;
+      }
+    }
+
+    // Filtra imágenes base64 de carga diferida (lazyload placeholders)
+    if (src.startsWith('data:image')) {
+      src = $img.attr('data-lazy-src') \vert{}\vert{}$img.attr('data-src') || '';
+    }
+
+    return src.trim();
+  }
 
   async popularNovels(pageNo: number) {
-    const url = `${this.site}page/${pageNo}/?s&post_type=wp-manga&m_orderby=views`;
+    // Usar la ruta específica de orden por vistas
+    const url = `${this.site}page/${pageNo}/?s=&post_type=wp-manga&m_orderby=views`;
     const res = await fetchApi(url);
     const text = await res.text();
     const $ = cheerio.load(text);
 
     const novels: any[] = [];
 
-    $('.c-tabs-item__content, .page-item-detail').each(function () {
-      const name = $(this).find('.post-title a').text().trim();
-      const imgObj = $(this).find('img');
-      const image =
-        imgObj.attr('data-src') ||
-        imgObj.attr('data-lazy-src') ||
-        imgObj.attr('src') ||
-        '';
-      const link = $(this).find('.post-title a').attr('href');
+    $('.c-tabs-item__content, .page-item-detail').each((_, element) => {
+      const name = $(element).find('.post-title a').text().trim();
+      const imgObj = $(element).find('img');
+      const image = this.parseCover(imgObj);
+      const link = $(element).find('.post-title a').attr('href');
 
       if (link && name) {
         novels.push({
           name: name,
-          cover: image.split(' ')[0], // Limpia query params o srcset
+          cover: image,
           path: link.replace('https://bailiantales.com/', ''),
         });
       }
@@ -46,17 +67,12 @@ class BailianTalesPlugin {
     const $ = cheerio.load(text);
 
     const statusText = $('.post-status').text();
-
     const imgObj = $('.summary_image img');
-    const cover =
-      imgObj.attr('data-src') ||
-      imgObj.attr('data-lazy-src') ||
-      imgObj.attr('src') ||
-      '';
+    const cover = this.parseCover(imgObj);
 
     const genresList: string[] = [];
-    $('.genres-content a').each(function () {
-      const genre = $(this).text().trim();
+    $('.genres-content a').each((_, el) => {
+      const genre = $(el).text().trim();
       if (genre) {
         genresList.push(genre);
       }
@@ -65,7 +81,7 @@ class BailianTalesPlugin {
     const novel: any = {
       path: novelPath,
       name: $('.post-title h1').text().trim() || 'Untitled',
-      cover: cover.split(' ')[0],
+      cover: cover,
       summary: $('.summary__content').text().trim() || '',
       author: $('.author-content').text().trim() || 'Unknown',
       status: statusText.includes('OnGoing')
@@ -80,19 +96,19 @@ class BailianTalesPlugin {
     const chapters: any[] = [];
 
     // 1. Extraer capítulos del HTML principal
-    $('.wp-manga-chapter').each(function () {
-      const name = $(this).find('a').text().trim();
-      const href = $(this).find('a').attr('href');
+    $('.wp-manga-chapter').each((_, el) => {
+      const name = $(el).find('a').text().trim();
+      const href = $(el).find('a').attr('href');
       if (href) {
         chapters.push({
           name: name,
           path: href.replace('https://bailiantales.com/', ''),
-          releaseTime: $(this).find('.chapter-release-date').text().trim() || null,
+          releaseTime: $(el).find('.chapter-release-date').text().trim() || null,
         });
       }
     });
 
-    // 2. Si no encontró capítulos, consulta el endpoint ajax/chapters/ o admin-ajax.php con headers
+    // 2. Si no hay capítulos en el DOM estático, peticionar vía AJAX
     if (chapters.length === 0) {
       const mangaId =
         $('#manga-chapters-holder').attr('data-id') ||
@@ -102,7 +118,6 @@ class BailianTalesPlugin {
       if (mangaId) {
         let ajaxHtml = '';
 
-        // Probar endpoint directo /ajax/chapters/
         try {
           const directAjax = await fetchApi(`${this.site}novel/${novelPath.replace('novel/', '').replace('/', '')}/ajax/chapters/`, {
             method: 'POST',
@@ -112,7 +127,6 @@ class BailianTalesPlugin {
           ajaxHtml = '';
         }
 
-        // Si el endpoint falló, usar admin-ajax con cabeceras completas
         if (!ajaxHtml || !ajaxHtml.includes('wp-manga-chapter')) {
           const formData = new URLSearchParams();
           formData.append('action', 'manga_get_chapters');
@@ -130,14 +144,14 @@ class BailianTalesPlugin {
           ajaxHtml = await ajaxRes.text();
         }
 
-        const $ajax = cheerio.load(ajaxHtml);$ajax('.wp-manga-chapter').each(function () {
-          const name = $ajax(this).find('a').text().trim();
-          const href = $ajax(this).find('a').attr('href');
+        const $ajax = cheerio.load(ajaxHtml);$ajax('.wp-manga-chapter').each((_, el) => {
+          const name = $ajax(el).find('a').text().trim();
+          const href = $ajax(el).find('a').attr('href');
           if (href) {
             chapters.push({
               name: name,
               path: href.replace('https://bailiantales.com/', ''),
-              releaseTime: $ajax(this).find('.chapter-release-date').text().trim() || null,
+              releaseTime: $ajax(el).find('.chapter-release-date').text().trim() || null,
             });
           }
         });
@@ -165,20 +179,16 @@ class BailianTalesPlugin {
 
     const novels: any[] = [];
 
-    $('.c-tabs-item__content, .page-item-detail').each(function () {
-      const name = $(this).find('.post-title a').text().trim();
-      const imgObj = $(this).find('img');
-      const image =
-        imgObj.attr('data-src') ||
-        imgObj.attr('data-lazy-src') ||
-        imgObj.attr('src') ||
-        '';
-      const link = $(this).find('.post-title a').attr('href');
+    $('.c-tabs-item__content, .page-item-detail').each((_, element) => {
+      const name = $(element).find('.post-title a').text().trim();
+      const imgObj = $(element).find('img');
+      const image = this.parseCover(imgObj);
+      const link = $(element).find('.post-title a').attr('href');
 
       if (link && name) {
         novels.push({
           name: name,
-          cover: image.split(' ')[0],
+          cover: image,
           path: link.replace('https://bailiantales.com/', ''),
         });
       }
