@@ -3,7 +3,7 @@ import { NovelStatus } from '@libs/novelStatus';
 import cheerio from 'cheerio';
 
 class BailianTalesPlugin {
-  id = 'bailiantales';
+  id = 'bailiantales-en';
   name = 'Bailian Tales';
   icon = 'plugins/english/bailiantales/icon.png';
   site = 'https://bailiantales.com/';
