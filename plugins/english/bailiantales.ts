@@ -7,16 +7,14 @@ class BailianTalesPlugin {
   name = 'Bailian Tales';
   icon = 'plugins/english/bailiantales/icon.png';
   site = 'https://bailiantales.com/';
-  version = '1.0.5';
+  version = '1.0.6';
 
-  // Función interna para obtener la URL limpia de la portada
   private parseCover($img: any): string {
     let src =
       $img.attr('data-src') ||
       $img.attr('data-lazy-src') \vert{}\vert{}$img.attr('src') ||
       '';
 
-    // Si viene un atributo srcset con varias imágenes, tomamos la primera URL limpia
     const srcset = $img.attr('data-srcset') \vert{}\vert{}$img.attr('srcset');
     if (srcset) {
       const firstUrl = srcset.split(',')[0].trim().split(' ')[0];
@@ -25,16 +23,23 @@ class BailianTalesPlugin {
       }
     }
 
-    // Filtra imágenes base64 de carga diferida (lazyload placeholders)
     if (src.startsWith('data:image')) {
       src = $img.attr('data-lazy-src') \vert{}\vert{}$img.attr('data-src') || '';
     }
 
-    return src.trim();
+    src = src.trim();
+
+    if (!src) return '';
+
+    // Si la URL es relativa (/wp-content/...), adjunta el dominio base
+    if (src.startsWith('/')) {
+      src = 'https://bailiantales.com' + src;
+    }
+
+    return src;
   }
 
   async popularNovels(pageNo: number) {
-    // Usar la ruta específica de orden por vistas
     const url = `${this.site}page/${pageNo}/?s=&post_type=wp-manga&m_orderby=views`;
     const res = await fetchApi(url);
     const text = await res.text();
@@ -44,7 +49,7 @@ class BailianTalesPlugin {
 
     $('.c-tabs-item__content, .page-item-detail').each((_, element) => {
       const name = $(element).find('.post-title a').text().trim();
-      const imgObj = $(element).find('img');
+      const imgObj = $(element).find('img').first();
       const image = this.parseCover(imgObj);
       const link = $(element).find('.post-title a').attr('href');
 
@@ -67,7 +72,7 @@ class BailianTalesPlugin {
     const $ = cheerio.load(text);
 
     const statusText = $('.post-status').text();
-    const imgObj = $('.summary_image img');
+    const imgObj = $('.summary_image img').first();
     const cover = this.parseCover(imgObj);
 
     const genresList: string[] = [];
@@ -95,7 +100,6 @@ class BailianTalesPlugin {
 
     const chapters: any[] = [];
 
-    // 1. Extraer capítulos del HTML principal
     $('.wp-manga-chapter').each((_, el) => {
       const name = $(el).find('a').text().trim();
       const href = $(el).find('a').attr('href');
@@ -108,7 +112,6 @@ class BailianTalesPlugin {
       }
     });
 
-    // 2. Si no hay capítulos en el DOM estático, peticionar vía AJAX
     if (chapters.length === 0) {
       const mangaId =
         $('#manga-chapters-holder').attr('data-id') ||
@@ -181,7 +184,7 @@ class BailianTalesPlugin {
 
     $('.c-tabs-item__content, .page-item-detail').each((_, element) => {
       const name = $(element).find('.post-title a').text().trim();
-      const imgObj = $(element).find('img');
+      const imgObj = $(element).find('img').first();
       const image = this.parseCover(imgObj);
       const link = $(element).find('.post-title a').attr('href');
 
