@@ -1,22 +1,29 @@
-import { Plugin } from '@typings/plugin';
 import { fetchApi } from '@libs/fetch';
 import { NovelStatus } from '@libs/novelStatus';
 import cheerio from 'cheerio';
 
-class BailianTalesPlugin implements Plugin.PluginBase {
-  id = 'bailiantales';
-  name = 'Bailian Tales';
-  icon = 'plugins/en/bailiantales/icon.png';
-  site = 'https://bailiantales.com/';
-  version = '1.0.1';
+class BailianTalesPlugin {
+  id: string;
+  name: string;
+  icon: string;
+  site: string;
+  version: string;
 
-  async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
+  constructor() {
+    this.id = 'bailiantales';
+    this.name = 'Bailian Tales';
+    this.icon = 'plugins/en/bailiantales/icon.png';
+    this.site = 'https://bailiantales.com/';
+    this.version = '1.0.1';
+  }
+
+  async popularNovels(pageNo: number) {
     const url = `${this.site}page/${pageNo}/?s&post_type=wp-manga&m_orderby=views`;
     const res = await fetchApi(url);
     const text = await res.text();
     const $ = cheerio.load(text);
 
-    const novels: Plugin.NovelItem[] = [];
+    const novels: any[] = [];
 
     $('.c-tabs-item__content').each((_, el) => {
       const name = $(el).find('.post-title a').text().trim();
@@ -35,7 +42,7 @@ class BailianTalesPlugin implements Plugin.PluginBase {
     return novels;
   }
 
-  async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
+  async parseNovel(novelPath: string) {
     const url = this.site + novelPath;
     const res = await fetchApi(url);
     const text = await res.text();
@@ -43,7 +50,7 @@ class BailianTalesPlugin implements Plugin.PluginBase {
 
     const statusText = $('.post-status').text();
 
-    const novel: Plugin.SourceNovel = {
+    const novel: any = {
       path: novelPath,
       name: $('.post-title h1').text().trim() || 'Untitled',
       cover: $('.summary_image img').attr('src') \vert{}\vert{}$('.summary_image img').attr('data-src') || '',
@@ -61,7 +68,7 @@ class BailianTalesPlugin implements Plugin.PluginBase {
       chapters: [],
     };
 
-    const chapters: Plugin.ChapterItem[] = [];
+    const chapters: any[] = [];
 
     $('.wp-manga-chapter').each((_, el) => {
       const name = $(el).find('a').text().trim();
@@ -107,7 +114,7 @@ class BailianTalesPlugin implements Plugin.PluginBase {
     return novel;
   }
 
-  async parseChapter(chapterPath: string): Promise<string> {
+  async parseChapter(chapterPath: string) {
     const url = this.site + chapterPath;
     const res = await fetchApi(url);
     const text = await res.text();
@@ -116,13 +123,13 @@ class BailianTalesPlugin implements Plugin.PluginBase {
     return $('.read-container, .text-left').html() || '';
   }
 
-  async searchNovels(searchTerm: string, pageNo: number): Promise<Plugin.NovelItem[]> {
+  async searchNovels(searchTerm: string, pageNo: number) {
     const url = `${this.site}page/${pageNo}/?s=${encodeURIComponent(searchTerm)}&post_type=wp-manga`;
     const res = await fetchApi(url);
     const text = await res.text();
     const $ = cheerio.load(text);
 
-    const novels: Plugin.NovelItem[] = [];
+    const novels: any[] = [];
 
     $('.c-tabs-item__content').each((_, el) => {
       const name = $(el).find('.post-title a').text().trim();
