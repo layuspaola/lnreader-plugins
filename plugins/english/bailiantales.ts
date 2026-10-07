@@ -1,29 +1,22 @@
+import { Plugin } from '@typings/plugin';
 import { fetchApi } from '@libs/fetch';
 import { NovelStatus } from '@libs/novelStatus';
 import cheerio from 'cheerio';
 
-export const id = 'bailiantales';
-export const name = 'Bailian Tales';
-export const site = 'https://bailiantales.com/';
-export const version = '1.0.1';
-export const icon = 'plugins/en/bailiantales/icon.png';
+class BailianTalesPlugin implements Plugin {
+  id = 'bailiantales';
+  name = 'Bailian Tales';
+  icon = 'plugins/en/bailiantales/icon.png';
+  site = 'https://bailiantales.com/';
+  version = '1.0.1';
 
-export default class BailianTalesPlugin {
-  constructor() {
-    this.id = id;
-    this.name = name;
-    this.icon = icon;
-    this.site = site;
-    this.version = version;
-  }
-
-  async popularNovels(page) {
+  async popularNovels(page: number) {
     const url = `${this.site}page/${page}/?s&post_type=wp-manga&m_orderby=views`;
     const res = await fetchApi(url);
     const body = await res.text();
     const $ = cheerio.load(body);
 
-    const novels = [];
+    const novels: any[] = [];
     $('.c-tabs-item__content').each((i, el) => {
       const name = $(el).find('.post-title a').text().trim();
       const image = $(el).find('img').attr('src') \vert{}\vert{}$(el).find('img').attr('data-src');
@@ -41,13 +34,13 @@ export default class BailianTalesPlugin {
     return novels;
   }
 
-  async parseNovel(novelPath) {
+  async parseNovel(novelPath: string) {
     const url = this.site + novelPath;
     const res = await fetchApi(url);
     const body = await res.text();
     const $ = cheerio.load(body);
 
-    const novel = {
+    const novel: any = {
       path: novelPath,
       name: $('.post-title h1').text().trim() || 'Untitled',
       cover: $('.summary_image img').attr('src') \vert{}\vert{}$('.summary_image img').attr('data-src') || '',
@@ -58,9 +51,9 @@ export default class BailianTalesPlugin {
       chapters: [],
     };
 
-    const chapters = [];
+    const chapters: any[] = [];
 
-    // Intento 1: Extracción directa si están en el HTML
+    // Intento 1: Extracción directa de capítulos desde el HTML
     $('.wp-manga-chapter').each((i, el) => {
       const name = $(el).find('a').text().trim();
       const href = $(el).find('a').attr('href');
@@ -73,7 +66,7 @@ export default class BailianTalesPlugin {
       }
     });
 
-    // Intento 2: Extracción vía AJAX si la lista vino vacía
+    // Intento 2: Carga vía AJAX si vinieron 0 capítulos
     if (chapters.length === 0) {
       const mangaId = $('#manga-chapters-holder').attr('data-id');
       if (mangaId) {
@@ -106,7 +99,7 @@ export default class BailianTalesPlugin {
     return novel;
   }
 
-  async parseChapter(chapterPath) {
+  async parseChapter(chapterPath: string) {
     const url = this.site + chapterPath;
     const res = await fetchApi(url);
     const body = await res.text();
@@ -116,13 +109,13 @@ export default class BailianTalesPlugin {
     return chapterText;
   }
 
-  async searchNovels(searchTerm, page) {
+  async searchNovels(searchTerm: string, page: number) {
     const url = `${this.site}page/${page}/?s=${encodeURI(searchTerm)}&post_type=wp-manga`;
     const res = await fetchApi(url);
     const body = await res.text();
     const $ = cheerio.load(body);
 
-    const novels = [];
+    const novels: any[] = [];
     $('.c-tabs-item__content').each((i, el) => {
       const name = $(el).find('.post-title a').text().trim();
       const image = $(el).find('img').attr('src') \vert{}\vert{}$(el).find('img').attr('data-src');
@@ -140,3 +133,5 @@ export default class BailianTalesPlugin {
     return novels;
   }
 }
+
+export default new BailianTalesPlugin();
