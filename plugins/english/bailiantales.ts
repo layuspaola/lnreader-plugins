@@ -3,11 +3,11 @@ import { NovelStatus } from '@libs/novelStatus';
 import cheerio from 'cheerio';
 
 class BailianTalesPlugin {
-  id = 'bailiantales-en';
+  id = 'bailiantales';
   name = 'Bailian Tales';
   icon = 'plugins/english/bailiantales/icon.png';
   site = 'https://bailiantales.com/';
-  version = '1.0.6';
+  version = '1.0.7';
 
   private parseCover($img: any): string {
     let src =
@@ -28,10 +28,8 @@ class BailianTalesPlugin {
     }
 
     src = src.trim();
-
     if (!src) return '';
 
-    // Si la URL es relativa (/wp-content/...), adjunta el dominio base
     if (src.startsWith('/')) {
       src = 'https://bailiantales.com' + src;
     }
@@ -40,20 +38,22 @@ class BailianTalesPlugin {
   }
 
   async popularNovels(pageNo: number) {
-    const url = `${this.site}page/${pageNo}/?s=&post_type=wp-manga&m_orderby=views`;
+    // Nueva ruta de listado / navegación
+    const url = pageNo === 1 ? this.site : `${this.site}page/${pageNo}/`;
     const res = await fetchApi(url);
     const text = await res.text();
     const $ = cheerio.load(text);
 
     const novels: any[] = [];
 
-    $('.c-tabs-item__content, .page-item-detail').each((_, element) => {
-      const name = $(element).find('.post-title a').text().trim();
+    // Adapta tanto selectores viejos como las nuevas cards de la web renovada
+    $('.novel-card, .popular-novel-item, .c-tabs-item__content, .page-item-detail, article').each((_, element) => {
+      const name = $(element).find('.post-title a, .novel-title a, h3 a, h2 a').first().text().trim();
       const imgObj = $(element).find('img').first();
       const image = this.parseCover(imgObj);
-      const link = $(element).find('.post-title a').attr('href');
+      const link = $(element).find('.post-title a, .novel-title a, h3 a, h2 a, a').first().attr('href');
 
-      if (link && name) {
+      if (link && name && !novels.some(n => n.name === name)) {
         novels.push({
           name: name,
           cover: image,
@@ -71,12 +71,12 @@ class BailianTalesPlugin {
     const text = await res.text();
     const $ = cheerio.load(text);
 
-    const statusText = $('.post-status').text();
-    const imgObj = $('.summary_image img').first();
+    const statusText = $('.post-status, .novel-status, .status').text();
+    const imgObj = $('.summary_image img, .novel-cover img, .cover img').first();
     const cover = this.parseCover(imgObj);
 
     const genresList: string[] = [];
-    $('.genres-content a').each((_, el) => {
+    $('.genres-content a, .novel-genres a, .genres a').each((_, el) => {
       const genre = $(el).text().trim();
       if (genre) {
         genresList.push(genre);
@@ -85,13 +85,13 @@ class BailianTalesPlugin {
 
     const novel: any = {
       path: novelPath,
-      name: $('.post-title h1').text().trim() || 'Untitled',
+      name: $('.post-title h1, .novel-title h1, h1').first().text().trim() || 'Untitled',
       cover: cover,
-      summary: $('.summary__content').text().trim() || '',
-      author: $('.author-content').text().trim() || 'Unknown',
-      status: statusText.includes('OnGoing')
+      summary: $('.summary__content, .novel-summary, .description').text().trim() || '',
+      author: $('.author-content, .novel-author, .author').text().trim() || 'Unknown',
+      status: statusText.toLowerCase().includes('ongoing')
         ? NovelStatus.Ongoing
-        : statusText.includes('Completed')
+        : statusText.toLowerCase().includes('completed')
         ? NovelStatus.Completed
         : NovelStatus.Unknown,
       genres: genresList.join(', '),
@@ -100,18 +100,21 @@ class BailianTalesPlugin {
 
     const chapters: any[] = [];
 
-    $('.wp-manga-chapter').each((_, el) => {
-      const name = $(el).find('a').text().trim();
-      const href = $(el).find('a').attr('href');
-      if (href) {
+    // 1. Extraer capítulos del HTML estático con selectores ampliados
+    $('.wp-manga-chapter, .chapter-item, .chapter-list li, .chapters-list a').each((_, el) => {
+      const $a =$(el).find('a').length ? $(el).find('a').first() :$(el);
+      const name = $a.text().trim();
+      const href = $a.attr('href');
+      if (href && name) {
         chapters.push({
           name: name,
           path: href.replace('https://bailiantales.com/', ''),
-          releaseTime: $(el).find('.chapter-release-date').text().trim() || null,
+          releaseTime: $(el).find('.chapter-release-date, .date, time').text().trim() || null,
         });
       }
     });
 
+    // 2. Fallback vía AJAX si no vinieron en el HTML inicial
     if (chapters.length === 0) {
       const mangaId =
         $('#manga-chapters-holder').attr('data-id') ||
@@ -130,7 +133,7 @@ class BailianTalesPlugin {
           ajaxHtml = '';
         }
 
-        if (!ajaxHtml || !ajaxHtml.includes('wp-manga-chapter')) {
+        if (!ajaxHtml || !ajaxHtml.includes('chapter')) {
           const formData = new URLSearchParams();
           formData.append('action', 'manga_get_chapters');
           formData.append('manga', mangaId.toString());
@@ -147,14 +150,15 @@ class BailianTalesPlugin {
           ajaxHtml = await ajaxRes.text();
         }
 
-        const $ajax = cheerio.load(ajaxHtml);$ajax('.wp-manga-chapter').each((_, el) => {
-          const name = $ajax(el).find('a').text().trim();
-          const href = $ajax(el).find('a').attr('href');
-          if (href) {
+        const $ajax = cheerio.load(ajaxHtml);$ajax('.wp-manga-chapter, .chapter-item, li').each((_, el) => {
+          const $a =$ajax(el).find('a').length ? $ajax(el).find('a').first() :$ajax(el);
+          const name = $a.text().trim();
+          const href = $a.attr('href');
+          if (href && name) {
             chapters.push({
               name: name,
               path: href.replace('https://bailiantales.com/', ''),
-              releaseTime: $ajax(el).find('.chapter-release-date').text().trim() || null,
+              releaseTime: $ajax(el).find('.chapter-release-date, .date').text().trim() || null,
             });
           }
         });
@@ -171,24 +175,24 @@ class BailianTalesPlugin {
     const text = await res.text();
     const $ = cheerio.load(text);
 
-    return $('.read-container, .text-left, .entry-content').html() || '';
+    return $('.read-container, .text-left, .entry-content, .chapter-content, .reading-content').html() || '';
   }
 
   async searchNovels(searchTerm: string, pageNo: number) {
-    const url = `${this.site}page/${pageNo}/?s=${encodeURIComponent(searchTerm)}&post_type=wp-manga`;
+    const url = `${this.site}?s=${encodeURIComponent(searchTerm)}`;
     const res = await fetchApi(url);
     const text = await res.text();
     const $ = cheerio.load(text);
 
     const novels: any[] = [];
 
-    $('.c-tabs-item__content, .page-item-detail').each((_, element) => {
-      const name = $(element).find('.post-title a').text().trim();
+    $('.novel-card, .search-item, .c-tabs-item__content, .page-item-detail, article').each((_, element) => {
+      const name = $(element).find('.post-title a, .novel-title a, h3 a, h2 a').first().text().trim();
       const imgObj = $(element).find('img').first();
       const image = this.parseCover(imgObj);
-      const link = $(element).find('.post-title a').attr('href');
+      const link = $(element).find('.post-title a, .novel-title a, h3 a, h2 a, a').first().attr('href');
 
-      if (link && name) {
+      if (link && name && !novels.some(n => n.name === name)) {
         novels.push({
           name: name,
           cover: image,
