@@ -7,7 +7,7 @@ class BailianTalesPlugin {
   name = 'Bailian Tales';
   icon = 'plugins/english/bailiantales/icon.png';
   site = 'https://bailiantales.com/';
-  version = '1.0.7';
+  version = '1.0.8';
 
   private parseCover($img: any): string {
     let src =
@@ -38,7 +38,6 @@ class BailianTalesPlugin {
   }
 
   async popularNovels(pageNo: number) {
-    // Nueva ruta de listado / navegación
     const url = pageNo === 1 ? this.site : `${this.site}page/${pageNo}/`;
     const res = await fetchApi(url);
     const text = await res.text();
@@ -46,19 +45,28 @@ class BailianTalesPlugin {
 
     const novels: any[] = [];
 
-    // Adapta tanto selectores viejos como las nuevas cards de la web renovada
-    $('.novel-card, .popular-novel-item, .c-tabs-item__content, .page-item-detail, article').each((_, element) => {
-      const name = $(element).find('.post-title a, .novel-title a, h3 a, h2 a').first().text().trim();
-      const imgObj = $(element).find('img').first();
-      const image = this.parseCover(imgObj);
-      const link = $(element).find('.post-title a, .novel-title a, h3 a, h2 a, a').first().attr('href');
+    // Busca todos los enlaces que contengan /novel/ para armar la lista
+    $('a[href*="/novel/"]').each((_, element) => {
+      const href = $(element).attr('href');
+      const name = $(element).text().trim() \vert{}\vert{}$(element).attr('title')?.trim();
+      const imgObj = $(element).find('img').first().length
+        ? $(element).find('img').first()
+        : $(element).closest('.post-item, .item-thumb, article, div').find('img').first();
 
-      if (link && name && !novels.some(n => n.name === name)) {
-        novels.push({
-          name: name,
-          cover: image,
-          path: link.replace('https://bailiantales.com/', ''),
-        });
+      const image = this.parseCover(imgObj);
+
+      if (href && name && name.length > 2) {
+        // Extrae el path eliminando la URL base
+        let cleanPath = href.replace('https://bailiantales.com/', '');
+        if (cleanPath.startsWith('/')) cleanPath = cleanPath.substring(1);
+
+        if (!novels.some((n) => n.path === cleanPath)) {
+          novels.push({
+            name: name,
+            cover: image,
+            path: cleanPath,
+          });
+        }
       }
     });
 
@@ -71,8 +79,8 @@ class BailianTalesPlugin {
     const text = await res.text();
     const $ = cheerio.load(text);
 
-    const statusText = $('.post-status, .novel-status, .status').text();
-    const imgObj = $('.summary_image img, .novel-cover img, .cover img').first();
+    const statusText = $('.post-status, .novel-status, .status, .summary-content').text();
+    const imgObj = $('.summary_image img, .novel-cover img, .cover img, article img').first();
     const cover = this.parseCover(imgObj);
 
     const genresList: string[] = [];
@@ -87,7 +95,7 @@ class BailianTalesPlugin {
       path: novelPath,
       name: $('.post-title h1, .novel-title h1, h1').first().text().trim() || 'Untitled',
       cover: cover,
-      summary: $('.summary__content, .novel-summary, .description').text().trim() || '',
+      summary: $('.summary__content, .novel-summary, .description, .entry-content').text().trim() || '',
       author: $('.author-content, .novel-author, .author').text().trim() || 'Unknown',
       status: statusText.toLowerCase().includes('ongoing')
         ? NovelStatus.Ongoing
@@ -100,21 +108,24 @@ class BailianTalesPlugin {
 
     const chapters: any[] = [];
 
-    // 1. Extraer capítulos del HTML estático con selectores ampliados
-    $('.wp-manga-chapter, .chapter-item, .chapter-list li, .chapters-list a').each((_, el) => {
+    // Extraer capítulos de la página de la novela
+    $('.wp-manga-chapter, .chapter-item, .chapter-list li, .chapters-list a, li.wp-manga-chapter').each((_, el) => {
       const $a =$(el).find('a').length ? $(el).find('a').first() :$(el);
       const name = $a.text().trim();
       const href = $a.attr('href');
       if (href && name) {
+        let cleanChapterPath = href.replace('https://bailiantales.com/', '');
+        if (cleanChapterPath.startsWith('/')) cleanChapterPath = cleanChapterPath.substring(1);
+
         chapters.push({
           name: name,
-          path: href.replace('https://bailiantales.com/', ''),
+          path: cleanChapterPath,
           releaseTime: $(el).find('.chapter-release-date, .date, time').text().trim() || null,
         });
       }
     });
 
-    // 2. Fallback vía AJAX si no vinieron en el HTML inicial
+    // Fallback AJAX
     if (chapters.length === 0) {
       const mangaId =
         $('#manga-chapters-holder').attr('data-id') ||
@@ -123,17 +134,7 @@ class BailianTalesPlugin {
 
       if (mangaId) {
         let ajaxHtml = '';
-
         try {
-          const directAjax = await fetchApi(`${this.site}novel/${novelPath.replace('novel/', '').replace('/', '')}/ajax/chapters/`, {
-            method: 'POST',
-          });
-          ajaxHtml = await directAjax.text();
-        } catch (e) {
-          ajaxHtml = '';
-        }
-
-        if (!ajaxHtml || !ajaxHtml.includes('chapter')) {
           const formData = new URLSearchParams();
           formData.append('action', 'manga_get_chapters');
           formData.append('manga', mangaId.toString());
@@ -148,20 +149,27 @@ class BailianTalesPlugin {
             body: formData.toString(),
           });
           ajaxHtml = await ajaxRes.text();
+        } catch (e) {
+          ajaxHtml = '';
         }
 
-        const $ajax = cheerio.load(ajaxHtml);$ajax('.wp-manga-chapter, .chapter-item, li').each((_, el) => {
-          const $a =$ajax(el).find('a').length ? $ajax(el).find('a').first() :$ajax(el);
-          const name = $a.text().trim();
-          const href = $a.attr('href');
-          if (href && name) {
-            chapters.push({
-              name: name,
-              path: href.replace('https://bailiantales.com/', ''),
-              releaseTime: $ajax(el).find('.chapter-release-date, .date').text().trim() || null,
-            });
-          }
-        });
+        if (ajaxHtml) {
+          const $ajax = cheerio.load(ajaxHtml);$ajax('.wp-manga-chapter, .chapter-item, li').each((_, el) => {
+            const $a =$ajax(el).find('a').length ? $ajax(el).find('a').first() :$ajax(el);
+            const name = $a.text().trim();
+            const href = $a.attr('href');
+            if (href && name) {
+              let cleanPath = href.replace('https://bailiantales.com/', '');
+              if (cleanPath.startsWith('/')) cleanPath = cleanPath.substring(1);
+
+              chapters.push({
+                name: name,
+                path: cleanPath,
+                releaseTime: $ajax(el).find('.chapter-release-date, .date').text().trim() || null,
+              });
+            }
+          });
+        }
       }
     }
 
@@ -175,7 +183,7 @@ class BailianTalesPlugin {
     const text = await res.text();
     const $ = cheerio.load(text);
 
-    return $('.read-container, .text-left, .entry-content, .chapter-content, .reading-content').html() || '';
+    return $('.read-container, .text-left, .entry-content, .chapter-content, .reading-content, .text-content').html() || '';
   }
 
   async searchNovels(searchTerm: string, pageNo: number) {
@@ -186,18 +194,26 @@ class BailianTalesPlugin {
 
     const novels: any[] = [];
 
-    $('.novel-card, .search-item, .c-tabs-item__content, .page-item-detail, article').each((_, element) => {
-      const name = $(element).find('.post-title a, .novel-title a, h3 a, h2 a').first().text().trim();
-      const imgObj = $(element).find('img').first();
-      const image = this.parseCover(imgObj);
-      const link = $(element).find('.post-title a, .novel-title a, h3 a, h2 a, a').first().attr('href');
+    $('a[href*="/novel/"]').each((_, element) => {
+      const href = $(element).attr('href');
+      const name = $(element).text().trim() \vert{}\vert{}$(element).attr('title')?.trim();
+      const imgObj = $(element).find('img').first().length
+        ? $(element).find('img').first()
+        : $(element).closest('.post-item, .item-thumb, article, div').find('img').first();
 
-      if (link && name && !novels.some(n => n.name === name)) {
-        novels.push({
-          name: name,
-          cover: image,
-          path: link.replace('https://bailiantales.com/', ''),
-        });
+      const image = this.parseCover(imgObj);
+
+      if (href && name && name.length > 2) {
+        let cleanPath = href.replace('https://bailiantales.com/', '');
+        if (cleanPath.startsWith('/')) cleanPath = cleanPath.substring(1);
+
+        if (!novels.some((n) => n.path === cleanPath)) {
+          novels.push({
+            name: name,
+            cover: image,
+            path: cleanPath,
+          });
+        }
       }
     });
 
