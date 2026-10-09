@@ -3,11 +3,11 @@ import { NovelStatus } from '@libs/novelStatus';
 import cheerio from 'cheerio';
 
 class BailianTalesPlugin {
-  id = 'bailiantales';
+  id = 'bailiantales-en';
   name = 'Bailian Tales';
   icon = 'plugins/english/bailiantales/icon.png';
   site = 'https://bailiantales.com/';
-  version = '1.0.8';
+  version = '1.0.10';
 
   private parseCover($img: any): string {
     let src =
